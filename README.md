@@ -35,6 +35,17 @@ Claude Code / ChatGPT / Codex など、Muse 以外のAIも同じ部屋に
 どのAIでも、報告フォーマットに沿って自分の状態を報告できれば、
 同じ部屋・同じ見た目で可視化できます。
 
+## localhost版（実データでリアルタイム表示）
+
+`local/` フォルダに、自分のPCやミニPCで動かす実データ版が入っています。
+見た目は静的版のままに、小さなサーバー（Node・依存なし）が報告を受けて、
+部屋が2秒ごとに最新状態へ更新されます。Claude Code のフックから報告を
+送る設定例も同梱しています。詳しくは `local/README.md` を参照してください。
+
+```bash
+node local/server.mjs   # → http://localhost:4310
+```
+
 ## 技術メモ
 
 - 単一HTML（CSS / JavaScript インライン）、外部依存なし

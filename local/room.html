@@ -1,0 +1,1227 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
+    <link rel="icon" href="data:," />
+    <title>Agent Room（localhost版）</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;500;700;800&family=DotGothic16&display=swap" rel="stylesheet" />
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #4f9e3f;
+        --card: #101018;
+        --card-2: #1d1d2e;
+        --ink: #ffffff;
+        --muted: #c9c9d6;
+        --line: #ffffff;
+        --accent: #6ee7a0;
+        --accent-soft: #173d2a;
+        --coral: #ff8a70;
+        --amber: #ffd75e;
+        --amber-soft: #4a3a12;
+        --blue: #7fd4ff;
+        --blue-soft: #17384d;
+        --gray-soft: #2a2a3d;
+        --wall: #8b8fa3;
+        --wall-line: #565a6e;
+        --floor: #c9975a;
+        --floor-line: #9c6f36;
+        --rug: #b8303c;
+        --rug-line: #ffd75e;
+        --desk: #6e4520;
+        --desk-top: #a06a32;
+        --shadow: 6px 6px 0 rgba(0,0,0,.38);
+        --ok: #4ade80;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; }
+      body {
+        font-family: "DotGothic16", "M PLUS Rounded 1c", system-ui, sans-serif;
+        /* ドラクエ風・草原タイルの背景（Gatherのマップ外側） */
+        background-color: #57a639;
+        background-image:
+          linear-gradient(45deg, rgba(255,255,255,.06) 25%, transparent 25%, transparent 75%, rgba(255,255,255,.06) 75%),
+          linear-gradient(45deg, rgba(0,0,0,.07) 25%, transparent 25%, transparent 75%, rgba(0,0,0,.07) 75%),
+          linear-gradient(#62b445, #4f9e3f);
+        background-size: 32px 32px, 32px 32px, 100% 100%;
+        background-position: 0 0, 16px 16px, 0 0;
+        color: var(--ink);
+        -webkit-font-smoothing: antialiased;
+      }
+      .app { max-width: 1380px; margin: 0 auto; padding: 14px 14px 28px; }
+      .layout{grid-template-columns:minmax(0,1fr) 330px!important}
+      @media(max-width:880px){.layout{grid-template-columns:1fr!important}}
+
+      /* ---------- toolbar ---------- */
+      /* ===== ドラクエ風コマンドウィンドウ（黒窓＋白フチ＋二重枠） ===== */
+      .toolbar, .card {
+        background: #101018 !important; color: #fff !important;
+        border: 3px solid #fff !important; border-radius: 8px !important;
+        box-shadow: 0 0 0 3px #101018, 6px 6px 0 rgba(0,0,0,.38) !important;
+      }
+      .toolbar {
+        display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+        padding: 12px 14px; margin-bottom: 18px;
+      }
+      .stats { display: flex; flex-wrap: wrap; gap: 8px; margin-right: auto; }
+      .stat {
+        display: inline-flex; align-items: center; gap: 6px;
+        background: #1d1d2e; border: 2px solid #55556e;
+        border-radius: 4px; padding: 5px 10px; font-size: 13px; font-weight: 700; color:#fff;
+      }
+      .stat b { font-size: 15px; color: var(--amber); }
+      .dot { width: 10px; height: 10px; border-radius: 2px; flex: none; box-shadow: inset -2px -2px 0 rgba(0,0,0,.3); }
+      .dot.work { background: var(--ok); }
+      .dot.wait { background: var(--amber); }
+      .dot.done { background: var(--blue); }
+      .dot.idle { background: #a49c88; }
+      .btn {
+        font: inherit; font-size: 13px; font-weight: 700; cursor: pointer;
+        border: 2px solid #fff; background: #101018; color: #fff;
+        border-radius: 4px; padding: 7px 13px;
+      }
+      .btn::before { content: "▶ "; color: var(--amber); opacity: 0; }
+      .btn:hover { background: #2b2b48; } .btn:hover::before { opacity: 1; }
+      .btn:active { transform: translate(2px,2px); }
+
+      /* ---------- layout ---------- */
+      .layout { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 14px; align-items: start; }
+      @media (max-width: 880px) { .layout { grid-template-columns: 1fr; } }
+
+      /* ---------- room : Gather風マップ × ドラクエ風タイル ---------- */
+      .room-wrap { background: #5b3a1e; border: 4px solid #2b1a0c; border-radius: 6px; box-shadow: 6px 6px 0 rgba(0,0,0,.38); padding: 8px; }
+      .room {
+        position: relative; width: 100%; aspect-ratio: 16 / 12.5; overflow: hidden;
+        border: 4px solid #1a1208; border-radius: 2px; cursor: pointer; touch-action: manipulation;
+        image-rendering: pixelated;
+        background:
+          repeating-linear-gradient(90deg, transparent 0 30px, rgba(90,52,18,.55) 30px 32px),
+          repeating-linear-gradient(0deg, transparent 0 30px, rgba(90,52,18,.45) 30px 32px),
+          repeating-linear-gradient(90deg, #d2a263 0 32px, #c9975a 32px 64px);
+        background-color: #c9975a;
+      }
+      @media (max-width: 560px) { .room { aspect-ratio: 4 / 5.2; } }
+      /* expanded zones */
+      .zone-bath{position:absolute;right:0;top:17%;width:22%;height:22%;background:repeating-linear-gradient(90deg,#bfe8f2 0 18px,#9fd4e6 18px 20px),repeating-linear-gradient(0deg,transparent 0 18px,rgba(70,140,160,.35) 18px 20px),#cdeef7;border-left:4px solid #5aa0b5;border-bottom:4px solid #5aa0b5;z-index:1}
+      .zone-gym{position:absolute;right:1%;bottom:2%;width:24%;height:24%;background:#3a6b4f;border:3px solid #23402f;border-radius:4px;z-index:1;background-image:repeating-linear-gradient(90deg,transparent 0 22px,rgba(255,255,255,.12) 22px 24px)}
+      .zone-kitchen{position:absolute;left:0;bottom:0;width:27%;height:26%;background:repeating-linear-gradient(0deg,#e8d5a8 0 20px,#d9c08a 20px 22px);border-top:4px solid #8a6a3a;border-right:4px solid #8a6a3a;z-index:1}
+      .zone-living{position:absolute;left:30%;bottom:1%;width:36%;height:24%;background:#7a2e35;border:3px solid #ffd75e;z-index:1}
+      .bathtub{position:absolute;right:4%;top:22%;width:16%;height:11%;background:#fff;border:4px solid #7fb8c9;border-radius:0 0 18px 18px;z-index:2;box-shadow:inset 0 6px 0 #aee6f5}
+      .bathtub::before{content:"";position:absolute;left:8%;top:-45%;width:22%;height:50%;background:#ffd9ec;border:2px solid #c97aa6;border-radius:50%}
+      .bathtub::after{content:"♨";position:absolute;right:6%;top:-70%;font-size:14px;color:#5aa0b5}
+      .dining-table{position:absolute;left:5%;bottom:8%;width:18%;height:10%;background:#8a5a2b;border:3px solid #4a2d10;z-index:2;border-radius:3px}
+      .dining-table::before{content:"🍚 🍳 🥗";position:absolute;inset:2px;font-size:11px;text-align:center;letter-spacing:2px}
+      .gym-mat{position:absolute;right:6%;bottom:12%;width:14%;height:6%;background:#ff8a70;border:2px solid #b84a32;z-index:2}
+      .dumbbell{position:absolute;font-size:14px;z-index:3;filter:drop-shadow(1px 1px 0 #000)}
+      .tv{position:absolute;left:38%;bottom:23.5%;width:20%;height:9%;background:#101828;border:3px solid #000;z-index:2;display:grid;place-items:center;color:#7fd4ff;font-size:10px;letter-spacing:.08em}
+      .tv::after{content:"";position:absolute;bottom:-8px;left:42%;width:16%;height:6px;background:#000}
+      .prop{position:absolute;right:-6px;top:34px;width:22px;height:22px;background:#101018;border:2px solid #fff;border-radius:4px;display:none;place-items:center;font-size:13px;z-index:5;box-shadow:2px 2px 0 rgba(0,0,0,.4)}
+      .agent.has-prop .prop{display:grid}
+      .agent.action-workout .avatar{animation:squat .5s steps(2,end) infinite!important}
+      @keyframes squat{0%,100%{transform:translateY(0) scaleY(1)}50%{transform:translateY(3px) scaleY(.92)}}
+      .agent.action-bath .avatar{opacity:.92;filter:drop-shadow(0 0 6px #aee6f5)}
+      .agent.action-phone .avatar{animation:bob .9s steps(2,end) infinite}
+      .agent.action-eat .prop{animation:eatBounce .6s steps(2,end) infinite}
+      @keyframes eatBounce{50%{transform:translateY(-3px)}}
+      /* ===== リアルみ強化：キーボードと両手タッピング（PC作業） ===== */
+      .fx{display:none;position:absolute;z-index:6;pointer-events:none}
+      .fx-keyboard{left:50%;bottom:-3px;transform:translateX(-50%);width:46px;height:15px;background-color:#20242e;border:2px solid #0c0f16;border-radius:3px;box-shadow:2px 2px 0 rgba(0,0,0,.35);background-image:repeating-linear-gradient(90deg,#454e63 0 4px,transparent 4px 7px),repeating-linear-gradient(0deg,transparent 0 4px,rgba(255,255,255,.10) 4px 5px)}
+      .fx-keyboard .hand{position:absolute;top:-6px;width:10px;height:10px;background:#ffdfc2;border:2px solid #d9a06b;border-radius:3px;box-shadow:1px 1px 0 rgba(0,0,0,.3)}
+      .fx-keyboard .hL{left:6px;animation:tapHand .18s steps(2,end) infinite}
+      .fx-keyboard .hR{right:6px;animation:tapHand .18s steps(2,end) infinite;animation-delay:-.09s}
+      @keyframes tapHand{0%,100%{transform:translateY(0)}50%{transform:translateY(3px)}}
+      .agent.action-pc .fx-keyboard{display:block}
+      .agent.action-pc .prop{display:none}
+      .agent.action-pc .avatar{animation:bob .36s steps(2,end) infinite}
+      /* スマホは体の前で両手持ち風に */
+      .agent.action-phone .prop{right:auto;left:50%;top:auto;bottom:4px;transform:translateX(-50%)}
+      /* ===== リアルみ強化：お風呂（肩まで浸かる＋湯面じゃばじゃば＋湯気） ===== */
+      .fx-bath{left:-6px;right:-6px;top:0;bottom:-4px}
+      .agent.action-bath .fx-bath{display:block}
+      .agent.action-bath .avatar svg{transform:translateY(5px)}
+      .fx-bath .water{position:absolute;left:0;right:0;bottom:0;height:48%;background:repeating-linear-gradient(90deg,#8fd8ef 0 7px,#6ec7e8 7px 9px,#a5e4f7 9px 16px);border-top:3px solid #eafcff;opacity:.94;animation:jabajaba .5s steps(3,end) infinite}
+      .fx-bath .water::before{content:"";position:absolute;left:6%;right:6%;top:-7px;height:5px;background:repeating-linear-gradient(90deg,#eafcff 0 6px,transparent 6px 11px);animation:jabajaba .5s steps(3,end) infinite reverse}
+      @keyframes jabajaba{0%{background-position:0 0}100%{background-position:11px 0}}
+      .fx-bath .steam{position:absolute;top:-4px;width:8px;height:8px;background:#fff;border-radius:2px;opacity:0;box-shadow:1px 1px 0 rgba(120,180,200,.5);animation:steamRise 2.2s steps(6,end) infinite}
+      .fx-bath .s1{left:16%}
+      .fx-bath .s2{left:46%;width:10px;height:10px;animation-delay:-.8s}
+      .fx-bath .s3{left:74%;animation-delay:-1.5s}
+      @keyframes steamRise{0%{transform:translate(0,2px) scale(.7);opacity:0}30%{opacity:.95}100%{transform:translate(3px,-20px) scale(1.25);opacity:0}}
+      /* マップの質感：湯船ゾーンの水のきらめき、TVのちらつき、部屋の奥行き */
+      .zone-bath{animation:bathShimmer 2.8s steps(6,end) infinite}
+      @keyframes bathShimmer{0%{background-position:0 0,0 0,0 0}100%{background-position:36px 0,0 0,0 0}}
+      .tv{animation:tvFlicker 2.6s steps(14,end) infinite}
+      @keyframes tvFlicker{0%,100%{filter:brightness(1)}48%{filter:brightness(1)}50%{filter:brightness(1.35)}52%{filter:brightness(.92)}54%{filter:brightness(1.1)}}
+      .room{box-shadow:inset 0 0 0 4px rgba(0,0,0,.14),inset 0 -20px 26px rgba(60,30,0,.16),inset 0 10px 18px rgba(60,30,0,.10)}
+      .torch-f svg{transform-origin:50% 30%;animation:flameFlicker .34s steps(2,end) infinite}
+      @keyframes flameFlicker{0%,100%{transform:scaleY(1) translateX(0)}50%{transform:scaleY(1.14) translateX(.5px)}}
+      /* Gather風ゾーン：中央の通路（石畳） */
+      .path { position:absolute; left:46%; top:17%; width:8%; height:83%; background: repeating-linear-gradient(0deg,#b9bdc9 0 22px,#9fa4b3 22px 24px), #b9bdc9; border-left:3px solid #7d8293; border-right:3px solid #7d8293; opacity:.95; }
+      .path-h { position:absolute; left:0; top:52%; width:100%; height:10%; background: repeating-linear-gradient(90deg,#b9bdc9 0 22px,#9fa4b3 22px 24px), #b9bdc9; border-top:3px solid #7d8293; border-bottom:3px solid #7d8293; opacity:.55; }
+      .wall {
+        position: absolute; left: 0; right: 0; top: 0; height: 17%; z-index:2;
+        /* 城・酒場の石壁レンガ */
+        background:
+          repeating-linear-gradient(0deg, transparent 0 14px, #4c4f61 14px 16px),
+          repeating-linear-gradient(90deg, transparent 0 30px, #4c4f61 30px 32px),
+          linear-gradient(#9aa0b5,#7e8499);
+        border-bottom: 6px solid #3f4254;
+        box-shadow: 0 6px 0 rgba(0,0,0,.22);
+      }
+      .wall::before { content:""; position:absolute; left:0; right:0; top:0; height:8px; background: repeating-linear-gradient(90deg,#565a6e 0 24px, transparent 24px 40px); }
+      .window {
+        position: absolute; top: 18%; width: 13%; height: 60%;
+        background: linear-gradient(180deg, #8ed8ff, #dff6ff);
+        border: 4px solid #5b3a1e; border-radius: 2px; box-shadow: inset 0 0 0 2px #fff8c9;
+      }
+      .window::after { content: ""; position: absolute; left: 50%; top: 0; bottom: 0; width: 4px; background: #5b3a1e; }
+      .window::before { content: ""; position: absolute; top: 50%; left:0; right:0; height:4px; background:#5b3a1e; z-index:1; }
+      .board {
+        position: absolute; top: 8%; left: 42%; width: 28%; height: 80%;
+        /* 木の掲示板＝クエストボード */
+        background: repeating-linear-gradient(0deg,#8a5a2b 0 12px,#7a4e24 12px 14px), #8a5a2b;
+        border: 4px solid #4a2d10; border-radius: 2px; padding: 5px 7px;
+        font-size: clamp(7px, 1.4vw, 11px); color: #fff7d6; line-height: 1.5; overflow: hidden;
+        text-shadow: 1px 1px 0 #000;
+      }
+      .board b { display: block; font-size: 1.15em; color: #ffd75e; }
+      .clock { display:none; }
+      .torch { position:absolute; top:22%; width:22px; height:34px; z-index:3; image-rendering:pixelated; }
+      .rug {
+        position: absolute; left: 35%; top: 58%; width: 30%; height: 28%; z-index:1;
+        /* 王宮の赤絨毯（Gatherの集まる広場） */
+        background: repeating-linear-gradient(90deg,#c03442 0 16px,#a92835 16px 32px);
+        border: 4px solid #ffd75e; outline: 3px solid #7d1520; border-radius: 2px;
+      }
+      .desk {
+        position: absolute; width: 17%; height: 9.5%; z-index:2;
+        background: repeating-linear-gradient(90deg,#a06a32 0 18px,#8f5c28 18px 20px), #a06a32;
+        border: 3px solid #4a2d10; border-radius: 2px;
+        box-shadow: 0 5px 0 rgba(0,0,0,.28);
+      }
+      .desk::before {
+        content: ""; position: absolute; left: 50%; top: -38%; width: 36%; height: 66%;
+        transform: translateX(-50%); background: #202838; border: 3px solid #0c0f16; border-radius: 2px;
+        box-shadow: inset 0 0 0 2px #6ee7a0;
+      }
+      .desk::after {
+        content: ""; position: absolute; right: 8%; top: 18%; width: 10%; height: 44%;
+        background: #e33e4e; border:2px solid #7d1520; border-radius: 1px;
+      }
+      .plant { position: absolute; z-index:2; line-height: 1; user-select: none; }
+      .plant svg, .deco svg { display:block; width:100%; height:auto; image-rendering:pixelated; }
+      .deco { position:absolute; z-index:2; user-select:none; pointer-events:none; }
+      .sofa {
+        position: absolute; width: 15%; height: 8%; z-index:2;
+        background: #b8303c; border: 3px solid #6e1420; border-radius: 2px; box-shadow:0 4px 0 rgba(0,0,0,.25);
+      }
+      .sofa::before { content: ""; position: absolute; inset: 18% 8% auto; height: 40%; background: #d94a58; border:2px solid #6e1420; }
+      .shelf {
+        position: absolute; width: 12%; height: 7%; z-index:2;
+        background: #6e4520; border: 3px solid #3d240e; border-radius: 2px;
+        background-image: repeating-linear-gradient(90deg, #d95f4b 0 10px, #e9b949 10px 20px, #4b8fbf 20px 30px, #67a35c 30px 40px);
+        background-size: 100% 55%; background-repeat: no-repeat; background-position: bottom;
+      }
+      .entrance { position:absolute; left:44%; bottom:0; width:12%; height:7%; z-index:2; background:#3a2410; border:3px solid #ffd75e; border-bottom:0; color:#ffd75e; font-size:10px; display:grid; place-items:center; letter-spacing:.1em; }
+      .zone-label { position:absolute; z-index:2; background:#101018; color:#fff; border:2px solid #fff; border-radius:3px; font-size:10px; padding:2px 6px; pointer-events:none; }
+      .room-hint { font-size: 12px; color: #fff7d6; margin: 9px 4px 2px; font-weight: 700; text-shadow:1px 1px 0 rgba(0,0,0,.35); line-height:1.6; }
+
+      /* ---------- agents (pixel-art sprites) ---------- */
+      .agent {
+        position: absolute; width: 58px; margin-left: -29px; margin-top: -86px;
+        cursor: pointer; user-select: none; -webkit-tap-highlight-color: transparent;
+        transition: none; z-index: 5;
+      }
+      .agent.main { width: 76px; margin-left: -38px; margin-top: -108px; z-index: 8; }
+      .card h2, .card h3, .detail-name, .nameplate, .board, .btn {
+        font-family: "DotGothic16", "M PLUS Rounded 1c", sans-serif; letter-spacing: .02em;
+      }
+      .agent .bubble {
+        position: absolute; left: 50%; bottom: calc(100% + 6px); transform: translateX(-50%);
+        width: max-content; max-width: 168px;
+        background: #101018; color: #fff; border: 2px solid #fff; border-radius: 4px;
+        outline: 2px solid #101018;
+        padding: 5px 9px; font-size: 11px; font-weight: 700; line-height: 1.45;
+        box-shadow: 3px 3px 0 rgba(0,0,0,.35); text-align: center;
+        pointer-events: none;
+      }
+      .agent .bubble::after {
+        content: "▼"; position: absolute; left: 50%; bottom: -13px; transform: translateX(-50%);
+        font-size: 9px; color: #fff; text-shadow: 1px 1px 0 #000;
+      }
+      body.no-bubbles .agent .bubble { display: none; }
+      .agent .avatar { position: relative; animation: bob 1.6s steps(2, end) infinite; filter: drop-shadow(0 4px 3px rgba(60,40,10,.28)); }
+      .agent.main .avatar { animation-duration: 2s; }
+      .agent .avatar .flip { position: relative; }
+      .agent .avatar svg { display: block; width: 100%; height: auto; image-rendering: pixelated; }
+      .agent .avatar svg.fB { position: absolute; left: 0; top: 0; opacity: 0; }
+      @keyframes bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
+      /* toko-toko walk: body hops and sways side to side while legs and arms swing in 2 steps */
+      .agent.walking .avatar { animation: tokotoko .26s steps(2, end) infinite; }
+      @keyframes tokotoko { 0%, 100% { transform: translateY(0) rotate(-1.7deg); } 50% { transform: translateY(-3px) rotate(1.7deg); } }
+      .agent.walking .avatar svg.fA { animation: legA .26s steps(1, end) infinite; }
+      .agent.walking .avatar svg.fB { animation: legB .26s steps(1, end) infinite; }
+      @keyframes legA { 0%, 49.9% { opacity: 1; } 50%, 100% { opacity: 0; } }
+      @keyframes legB { 0%, 49.9% { opacity: 0; } 50%, 100% { opacity: 1; } }
+      .agent.selected .avatar { outline: 3px solid var(--coral); outline-offset: 2px; border-radius: 6px; }
+      .nameplate {
+        margin-top: 2px; display: flex; align-items: center; justify-content: center; gap: 4px;
+        width: max-content; position: relative; left: 50%; transform: translateX(-50%);
+        font-size: 11px; font-weight: 800; color: #fff;
+        background: #101018; border: 2px solid #fff; border-radius: 3px; padding: 1px 7px;
+        white-space: nowrap; box-shadow: 2px 2px 0 rgba(0,0,0,.35);
+      }
+      .agent.main .nameplate { font-size: 12.5px; background: #101018; border-color: #ffd75e; color:#ffd75e; }
+      .badge-main {
+        background: #d9a83c; color: #101018; font-size: 9.5px; font-weight: 800;
+        border-radius: 2px; padding: 1px 6px; letter-spacing: .04em;
+      }
+      .badge-sub {
+        background: #3d7ea6; color: #fff; font-size: 9.5px; font-weight: 800;
+        border-radius: 2px; padding: 1px 6px;
+      }
+
+      /* ---------- side panel ---------- */
+      .panel { display: flex; flex-direction: column; gap: 18px; }
+      .card { padding: 16px; }
+      .card h2 { margin: 0 0 4px; font-size: 16px; font-weight: 800; color:#fff; }
+      .card h3 { margin: 0 0 10px; font-size: 14px; font-weight: 800; color: var(--amber); }
+      .card h3::before { content: "◆ "; color:#fff; }
+      .detail-head { display: flex; gap: 12px; align-items: center; }
+      .detail-head .face { width: 50px; height: 58px; flex: none; background:#e8dcc0; border:2px solid #fff; border-radius:3px; padding:2px; }
+      .detail-head .face svg { width: 100%; height: 100%; image-rendering: pixelated; }
+      .detail-name { font-size: 19px; font-weight: 800; display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+      .detail-role { font-size: 12.5px; color: var(--muted); font-weight: 700; margin-top: 2px; }
+      .detail-name { color:#fff; }
+      .chip {
+        display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; font-weight: 800;
+        border-radius: 999px; padding: 3px 10px; margin-top: 7px;
+      }
+      .chip.work { background: var(--accent-soft); color: var(--accent); }
+      .chip.wait { background: var(--amber-soft); color: var(--amber); }
+      .chip.done { background: var(--blue-soft); color: var(--blue); }
+      .chip.idle { background: var(--gray-soft); color: var(--muted); }
+      .real-note {
+        margin-top: 12px; font-size: 12px; font-weight: 700; line-height: 1.6;
+        background: #3a2d08; border: 2px dashed #ffd75e; color: #ffe98a;
+        border-radius: 4px; padding: 8px 11px;
+      }
+      .demo-note {
+        margin-top: 12px; font-size: 12px; font-weight: 700; line-height: 1.6;
+        background: #23233a; border: 2px dashed #77778f; color: var(--muted);
+        border-radius: 4px; padding: 8px 11px;
+      }
+      .tasklist { list-style: none; margin: 14px 0 0; padding: 0; display: flex; flex-direction: column; gap: 9px; }
+      .task {
+        border: 2px solid #55556e; border-radius: 4px; padding: 9px 11px; background: var(--card-2); color:#fff;
+      }
+      .task-top { display: flex; gap: 8px; align-items: flex-start; }
+      .task-ic { flex: none; width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; font-weight: 800; margin-top: 1px; }
+      .task-ic.done { background: var(--blue); color: #fff; }
+      .task-ic.work { background: var(--ok); color: #fff; animation: pulse 1.4s ease-in-out infinite; }
+      .task-ic.wait { background: var(--amber); color: #fff; }
+      .task-ic.queued { background: #b9b09a; color: #fff; }
+      @keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.18); } }
+      .task-title { font-size: 13.5px; font-weight: 700; line-height: 1.5; overflow-wrap: anywhere; }
+      .task-note { font-size: 12px; color: var(--muted); font-weight: 500; line-height: 1.55; margin-top: 2px; overflow-wrap: anywhere; }
+      @media (max-width: 560px) {
+        .agent .bubble { max-width: 112px; font-size: 10.5px; display: none; }
+        .agent.main .bubble, .agent.selected .bubble { display: block; }
+      }
+      .task-top > div { min-width: 0; flex: 1; }
+      .task-state { margin-left: auto; flex: none; font-size: 11px; font-weight: 800; }
+      .task-state.done { color: var(--blue); } .task-state.work { color: var(--ok); }
+      .task-state.wait { color: var(--amber); } .task-state.queued { color: var(--muted); }
+      .bar { height: 7px; background: var(--gray-soft); border-radius: 99px; margin-top: 8px; overflow: hidden; }
+      .bar i { display: block; height: 100%; background: var(--ok); border-radius: 99px; transition: width .6s ease; }
+
+      .member-row {
+        display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
+        font: inherit; cursor: pointer; background: var(--card-2); color: #fff;
+        border: 2px solid #55556e; border-radius: 4px; padding: 8px 11px; margin-bottom: 8px;
+      }
+      .member-row:hover { border-color: #fff; background:#2b2b48; }
+      .member-row.sel { border-color: var(--amber); box-shadow: 0 0 0 2px rgba(255,215,94,.35); }
+      .member-row .face { width: 30px; height: 34px; flex: none; background:#e8dcc0; border-radius:2px; }
+      .member-row .face svg { width: 100%; height: 100%; image-rendering: pixelated; }
+      .member-row .mname { font-size: 13.5px; font-weight: 800; display: flex; gap: 6px; align-items: center; }
+      .member-row .mtask { font-size: 11.5px; color: var(--muted); font-weight: 500; line-height: 1.4; }
+      .member-row .dot { margin-left: auto; }
+
+      .log { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; font-size: 12.5px; color:#fff; }
+      .task-title { color:#fff; } .member-row .mtask { color: var(--muted) !important; }
+      .log li { display: flex; gap: 8px; line-height: 1.55; font-weight: 500; }
+      .log time { color: var(--muted); font-weight: 700; flex: none; font-size: 11.5px; padding-top: 1px; }
+      .log .tag { flex: none; font-size: 10px; font-weight: 800; border-radius: 6px; padding: 1px 5px; height: fit-content; margin-top: 2px; }
+      .tag.real { background: #ffe9a8; color: #6d5210; }
+      .tag.demo { background: var(--gray-soft); color: var(--muted); }
+
+      @media (prefers-reduced-motion: reduce) {
+        .agent .avatar, .agent.walking .avatar,
+        .agent.walking .avatar svg.fA, .agent.walking .avatar svg.fB,
+        .fx-keyboard .hand, .fx-bath .water, .fx-bath .water::before, .fx-bath .steam,
+        .zone-bath, .tv, .agent.action-pc .avatar,
+        .task-ic.work { animation: none; }
+        .fx-bath .steam { display: none; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <!-- toolbar -->
+      <div class="toolbar">
+        <div class="stats" id="stats"></div>
+        <button class="btn" id="btnPause" type="button">⏸ 一時停止</button>
+        <button class="btn" id="btnGather" type="button">みんなを広場に集める</button>
+        <button class="btn" id="btnAdd" type="button">＋ サブエージェントを追加</button>
+        <button class="btn" id="btnBubble" type="button">吹き出し：ON</button>
+      </div>
+
+      <div class="layout">
+        <!-- room -->
+        <section class="room-wrap">
+          <div class="room" id="room" aria-label="エージェントたちの冒険者ギルド">
+            <div class="path-h"></div><div class="path"></div>
+            <div class="wall">
+              <div class="window" style="left:4%"></div>
+              <div class="window" style="left:21%"></div>
+              <div class="board"><b>◆ クエスト掲示板</b>・朝会の準備<br />・訪問のふりかえり<br />・議事録の要約</div>
+              <div class="window" style="left:76%"></div>
+            </div>
+            <!-- 松明（ドット絵） -->
+            <div class="deco torch-f" style="left:36%; top:19%; width:22px"><svg viewBox="0 0 8 12" shape-rendering="crispEdges"><rect x="3" y="0" width="2" height="2" fill="#ffd75e"/><rect x="2" y="2" width="4" height="3" fill="#ff7a1a"/><rect x="3" y="5" width="2" height="2" fill="#8a5a2b"/><rect x="3" y="7" width="2" height="5" fill="#5b3a1e"/></svg></div>
+            <div class="deco torch-f" style="left:70%; top:19%; width:22px"><svg viewBox="0 0 8 12" shape-rendering="crispEdges"><rect x="3" y="0" width="2" height="2" fill="#ffd75e"/><rect x="2" y="2" width="4" height="3" fill="#ff7a1a"/><rect x="3" y="5" width="2" height="2" fill="#8a5a2b"/><rect x="3" y="7" width="2" height="5" fill="#5b3a1e"/></svg></div>
+            <div class="zone-bath"></div><div class="zone-gym"></div><div class="zone-kitchen"></div><div class="zone-living"></div>
+            <div class="bathtub"></div><div class="dining-table"></div><div class="gym-mat"></div>
+            <div class="dumbbell" style="right:20%;bottom:18%">🏋️</div><div class="dumbbell" style="right:5%;bottom:8%">💪</div>
+            <div class="tv">▶ おしらせ</div>
+            <span class="zone-label" style="left:4%; top:24%">💻 しごと机</span>
+            <span class="zone-label" style="right:4%; top:19.5%">♨ おふろ</span>
+            <span class="zone-label" style="left:42%; top:54%">ひろば</span>
+            <span class="zone-label" style="left:3%; bottom:24%">🍽 キッチン＆食事</span>
+            <span class="zone-label" style="left:34%; bottom:25%">🛋 リビング</span>
+            <span class="zone-label" style="right:4%; bottom:25%">🏋️ 筋トレ</span>
+            <div class="rug"></div>
+            <div class="desk" style="left:9%; top:34%"></div>
+            <div class="desk" style="left:41.5%; top:30%"></div>
+            <div class="desk" style="left:62%; top:34%"></div>
+            <div class="desk" style="left:9%; top:58%"></div>
+            <div class="desk" style="left:60%; top:58%"></div>
+            <div class="sofa" style="left:40%; top:86%"></div>
+            <div class="sofa" style="left:31%; top:86%;width:9%;background:#3d7ea6;border-color:#1e4a66"></div>
+            <div class="shelf" style="left:86%; top:20%"></div>
+            <!-- 木（ドット絵） -->
+            <div class="plant" style="left:1.5%; top:19%; width:34px"><svg viewBox="0 0 12 14" shape-rendering="crispEdges"><rect x="4" y="1" width="4" height="3" fill="#2f8f3a"/><rect x="2" y="4" width="8" height="4" fill="#3cb54a"/><rect x="3" y="8" width="6" height="2" fill="#2f8f3a"/><rect x="5" y="10" width="2" height="4" fill="#6e4520"/></svg></div>
+            <div class="plant" style="left:93%; top:52%; width:30px"><svg viewBox="0 0 12 14" shape-rendering="crispEdges"><rect x="4" y="1" width="4" height="3" fill="#2f8f3a"/><rect x="2" y="4" width="8" height="4" fill="#3cb54a"/><rect x="3" y="8" width="6" height="2" fill="#2f8f3a"/><rect x="5" y="10" width="2" height="4" fill="#6e4520"/></svg></div>
+            <!-- 宝箱 -->
+            <div class="deco" style="left:3%; top:86%; width:36px"><svg viewBox="0 0 14 10" shape-rendering="crispEdges"><rect x="1" y="1" width="12" height="3" fill="#a06a32"/><rect x="1" y="4" width="12" height="5" fill="#7a4e24"/><rect x="6" y="1" width="2" height="8" fill="#ffd75e"/><rect x="6" y="4" width="2" height="2" fill="#fff3a6"/></svg></div>
+            <!-- 花畑 -->
+            <div class="deco" style="left:88%; top:86%; width:44px"><svg viewBox="0 0 16 8" shape-rendering="crispEdges"><rect x="1" y="3" width="2" height="2" fill="#ff6b9a"/><rect x="6" y="1" width="2" height="2" fill="#ffd75e"/><rect x="11" y="3" width="2" height="2" fill="#ff6b9a"/><rect x="2" y="5" width="12" height="2" fill="#2f8f3a"/></svg></div>
+            <!-- 看板 -->
+            <div class="deco" style="left:62%; top:76%; width:34px"><svg viewBox="0 0 12 12" shape-rendering="crispEdges"><rect x="1" y="1" width="10" height="5" fill="#8a5a2b"/><rect x="2" y="2" width="8" height="1" fill="#ffd75e"/><rect x="2" y="4" width="6" height="1" fill="#fff7d6"/><rect x="5" y="6" width="2" height="6" fill="#5b3a1e"/></svg></div>
+            <div class="entrance">▼ 入口</div>
+            <div id="agentLayer"></div>
+          </div>
+          <p class="room-hint">▶ クリックで選択中の子がトコトコ歩きます。歩くときは机や家具を避けるルートを選び、ほかの子と重ならないよう譲り合いながら移動します。みんなは仕事の合間にソファで休んだり、お風呂・筋トレ・食事・スマホ・読書など日常のこともします。家具のある場所に行くと専用アクションと吹き出しに変わります。</p>
+        </section>
+
+        <!-- side panel -->
+        <aside class="panel">
+          <section class="card" id="detailCard" aria-live="polite"></section>
+
+          <section class="card">
+            <h3>お部屋のメンバー</h3>
+            <div id="memberList"></div>
+          </section>
+
+          <section class="card">
+            <h3>活動ログ</h3>
+            <ul class="log" id="logList"></ul>
+          </section>
+        </aside>
+      </div>
+    </div>
+
+    <script>
+      "use strict";
+      var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+      /* ============ avatar drawing: DQ-style pixel sprites (16x18) ============ */
+      function shade(hex, amt) {
+        var n = parseInt(hex.slice(1), 16);
+        function cl(v) { return Math.max(0, Math.min(255, v)); }
+        var r = cl((n >> 16) + amt), g = cl(((n >> 8) & 255) + amt), b = cl((n & 255) + amt);
+        return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+      }
+      /* head + torso rows shared by every frame; only the legs change */
+      var SPRITE_BODY = [
+        "................",
+        "....HHHHHHHH....",
+        "...HHwwHHHHHH...",
+        "..HHHHHHHHHHHH..",
+        "..HHSSSSSSSSHH..",
+        "..HSSSSSSSSSSH..",
+        "..HSEeSSSEeSSH..",
+        "..HSSSSSSSSSSH..",
+        "..HSCSSMMSSCSH..",
+        "...SSSSSSSSSS...",
+        "....BBBBBBBB....",
+        "..aBBBBYYBBBBa..",
+        "..SBBBBBBBBBBS..",
+        "...BBBBBBBBBB...",
+        "...KKKKKKKKKK..."
+      ];
+      var SPRITE_LEGS = {
+        idle: [
+          "....PPPPPPPP....",
+          "....PPP..PPP....",
+          "....FFF..FFF...."
+        ],
+        walkA: [
+          "...PPPP..PPPP...",
+          "...PPP....PPP...",
+          "..FFF......FFF.."
+        ],
+        walkB: [
+          "....PPPPPPP.....",
+          "...PPPP...PPP...",
+          "..FFF.....FFF..."
+        ]
+      };
+      var OUTFITS=["#e85d4f","#3d7ea6","#f2b63c","#4da165","#9b7ed9","#ff8a70","#2ec4b6","#e86a8a"];
+      function faceSVG(color, accessory, skin, frame, cls, outfit) {
+        frame = frame || "idle";
+        var rows = SPRITE_BODY.concat(SPRITE_LEGS[frame]).map(function (r) { return r.split(""); });
+        function set(x, y, ch) { if (rows[y] && x >= 0 && x < 16) rows[y][x] = ch; }
+        if (accessory === "leaf") {
+          set(5, 0, "l"); set(6, 0, "L"); set(7, 0, "L"); set(8, 0, "l"); set(6, 1, "L");
+        } else if (accessory === "ribbon") {
+          set(10, 0, "R"); set(12, 0, "R"); set(11, 0, "r");
+          set(10, 1, "R"); set(11, 1, "R"); set(12, 1, "R");
+        } else if (accessory === "cap") {
+          rows[1] = "....UUUUUUUU....".split("");
+          rows[2] = "...UUUUUUUUUU...".split("");
+          rows[3] = "..UUUUUUUUUUUU..".split("");
+        } else if (accessory === "headphone") {
+          rows[2] = "..DDDDDDDDDDDD..".split("");
+          [5, 6, 7, 8].forEach(function (y) { set(1, y, "D"); set(14, y, "D"); });
+        } else if (accessory === "glasses") {
+          set(3, 6, "G"); set(5, 6, "G"); set(6, 6, "G"); set(7, 6, "G");
+          set(8, 6, "G"); set(9, 6, "G"); set(12, 6, "G");
+        } else if (accessory === "star") {
+          set(12, 0, "Y"); set(11, 1, "Y"); set(12, 1, "Y"); set(13, 1, "Y"); set(12, 2, "Y");
+        }
+        /* ---- richer pixel texture: brows, hair shading, chin shadow ---- */
+        set(4, 5, "b"); set(5, 5, "b"); set(9, 5, "b"); set(10, 5, "b");
+        set(2, 4, "h"); set(13, 4, "h"); set(2, 5, "h"); set(13, 5, "h"); set(2, 6, "h"); set(13, 6, "h");
+        set(7, 9, "n"); set(8, 9, "n");
+        /* ---- arm swing while walking: the arm opposite the stepping leg reaches down ---- */
+        if (frame === "walkA") { set(2, 13, "S"); set(13, 12, "a"); }
+        else if (frame === "walkB") { set(13, 13, "S"); set(2, 12, "a"); }
+        var outfitColor = outfit || OUTFITS[Math.abs((color||"").split("").reduce(function(s,c){return s+c.charCodeAt(0)},0)) % OUTFITS.length];
+        var pal = {
+          H: color, h: shade(color, -45), w: shade(color,55), S: skin || "#ffdfc2", n: shade(skin || "#ffdfc2", -28), E: "#1a1512", e: "#ffffff", C: "#ff9eb0", M: "#c25a44", b: "#4a3220",
+          B: outfitColor, a: shade(outfitColor, -38),
+          P: "#3b3f5e", K: shade(outfitColor,-70), F: "#5b3a1e",
+          L: "#4da165", l: "#62b87c", R: "#ff5f8f", r: "#d14f74",
+          U: "#3d7ea6", D: "#2f3542", G: "#222", Y: "#ffe066"
+        };
+        var rects = "";
+        for (var y = 0; y < rows.length; y++) {
+          for (var x = 0; x < 16; x++) {
+            var ch = rows[y][x];
+            if (ch !== "." && pal[ch]) {
+              rects += '<rect x="' + x + '" y="' + y + '" width="1" height="1" fill="' + pal[ch] + '"/>';
+            }
+          }
+        }
+        return '<svg viewBox="0 0 16 18" xmlns="http://www.w3.org/2000/svg" role="img" aria-hidden="true"' +
+          (cls ? ' class="' + cls + '"' : "") + ' shape-rendering="crispEdges">' + rects + "</svg>";
+      }
+
+      /* ============ data ============ */
+      var ocha = {
+        id: "ocha", name: "おちゃ", main: true,
+        role: "メインエージェント（あなたの秘書）",
+        color: "#5da653", accessory: "leaf", outfit: "#2ec4b6",
+        x: 50, y: 47, home: { x: 50, y: 47 },
+        status: "wait",
+        statusLabel: "localhost連携 ・ 報告待ち",
+        bubbleLines: [
+          "サーバーからの報告を待っています"
+        ],
+        tasks: []
+      };
+
+      var subPool = [
+        { id: "claude-code", name: "Claude Code", role: "外部AI（Claude Code）", color: "#d97757", accessory: "glasses", outfit: "#8a5a44" },
+        { id: "codex", name: "Codex", role: "外部AI（Codex）", color: "#4a6fa5", accessory: "cap", outfit: "#2f3e55" },
+        { id: "chatgpt", name: "ChatGPT", role: "外部AI（ChatGPT）", color: "#10a37f", accessory: "star", outfit: "#0b6e55" },
+        { id: "gemini", name: "Gemini", role: "外部AI（Gemini）", color: "#7b8cff", accessory: "ribbon", outfit: "#4a5aa8" }
+      ];
+      var taskPool = [];
+      var desks = [
+        { x: 17, y: 47 }, { x: 50, y: 43 }, { x: 70, y: 47 },
+        { x: 17, y: 71 }, { x: 68, y: 71 }
+      ];
+      var GIMMICKS=[
+        {x:86,y:36,action:"bath",prop:"♨",bubble:"お風呂でリフレッシュ中♨",label:"お風呂"},
+        {x:48,y:92,action:"sofa",prop:"🛋",bubble:"ソファでまったり休憩中",label:"ソファ休憩"},
+        {x:85,y:84,action:"workout",prop:"💪",bubble:"筋トレ中！スクワット！",label:"筋トレ"},
+        {x:14,y:86,action:"eat",prop:"🍙",bubble:"ごはん食べてます。おいしい！",label:"食事"},
+        {x:50,y:74,action:"phone",prop:"📱",bubble:"スマホで連絡をチェック中",label:"スマホ操作"},
+        {x:88,y:62,action:"phone",prop:"📱",bubble:"スマホで写真を見てます",label:"スマホ"},
+        {x:32,y:68,action:"pc",prop:"💻",bubble:"PCカタカタ…集中してます",label:"PC作業"},
+        {x:14,y:47,action:"pc",prop:"💻",bubble:"PCで資料を作成中",label:"PC作業"},
+        {x:38,y:90,action:"read",prop:"📖",bubble:"ソファで読書中",label:"読書"},
+        {x:20,y:82,action:"eat",prop:"☕",bubble:"コーヒーでひと息",label:"お茶"},
+        {x:78,y:92,action:"workout",prop:"🏋️",bubble:"ダンベル上げてます！",label:"筋トレ"},
+        {x:50,y:93,action:"game",prop:"🎮",bubble:"ちょっとゲームで息抜き",label:"ゲーム"}
+      ];
+      var strollSpots = GIMMICKS.map(function(g){return {x:g.x,y:g.y,gimmick:g};}).concat([{ x: 50, y: 74 }, { x: 12, y: 26 }]);
+
+      var usedAgentIds = { ocha: true };
+      function makeSub(def, deskIdx) {
+        var id = def.id || ("sub-" + def.name);
+        if (usedAgentIds[id]) { var n = 2; while (usedAgentIds[id + "-" + n]) n++; id = id + "-" + n; }
+        usedAgentIds[id] = true;
+        return {
+          id: id,
+          name: def.name, main: false, badge: "外部", role: def.role,
+          color: def.color, accessory: def.accessory, outfit: def.outfit,
+          x: desks[deskIdx].x, y: desks[deskIdx].y,
+          home: { x: desks[deskIdx].x, y: desks[deskIdx].y },
+          status: "idle", statusLabel: "待機中",
+          bubbleLines: ["待機中です"],
+          tasks: []
+        };
+      }
+
+      var agents = [ocha];
+      for (var i = 0; i < 3; i++) agents.push(makeSub(subPool[i], [0, 2, 3][i]));
+
+      var selectedId = "ocha";
+      var paused = false;
+      var gathered = false;
+
+      /* ============ DOM build ============ */
+      var room = document.getElementById("room");
+      var layer = document.getElementById("agentLayer");
+      var state = {}; // id -> {el, bubbleEl, tx, ty, mode, waitUntil, bubbleIdx}
+
+      function agentEl(a) {
+        var el = document.createElement("div");
+        el.className = "agent" + (a.main ? " main" : "");
+        el.dataset.id = a.id;
+        el.innerHTML =
+          '<div class="bubble"></div>' +
+          '<div class="avatar"><div class="flip">' +
+          faceSVG(a.color, a.accessory, null, "walkA", "fA", a.outfit) +
+          faceSVG(a.color, a.accessory, null, "walkB", "fB", a.outfit) +
+          '</div><div class="prop"></div>' +
+          '<div class="fx fx-keyboard"><i class="hand hL"></i><i class="hand hR"></i></div>' +
+          '<div class="fx fx-bath"><span class="steam s1"></span><span class="steam s2"></span><span class="steam s3"></span><div class="water"></div></div></div>' +
+          '<div class="nameplate"><span class="sdot dot work"></span>' + a.name +
+          (a.main ? '<span class="badge-main">メイン</span>' : '<span class="badge-sub">' + (a.badge || "サブ") + '</span>') + "</div>";
+        el.addEventListener("click", function (ev) { ev.stopPropagation(); selectAgent(a.id); });
+        layer.appendChild(el);
+        return el;
+      }
+      agents.forEach(function (a) {
+        var el = agentEl(a);
+        state[a.id] = { el: el, bubbleEl: el.querySelector(".bubble"), dotEl: el.querySelector(".sdot"),
+          flipEl: el.querySelector(".flip"), propEl: el.querySelector(".prop"),
+          tx: a.x, ty: a.y, mode: "stay", waitUntil: 0, bubbleIdx: 0, gimmick: null, actionUntil: 0, pendingGimmick: null,
+          path: [], pathIdx: 0, goalX: a.x, goalY: a.y, yieldSince: 0, yieldSide: 0, clearSince: 0, replanAt: 0, stuckX: a.x, stuckY: a.y, stuckAt: performance.now(), sepAt: 0,
+          strollAt: performance.now() + 5000 + Math.random() * 10000 };
+        place(a);
+      });
+      function place(a) {
+        var s = state[a.id];
+        s.el.style.left = a.x + "%";
+        s.el.style.top = a.y + "%";
+        /* keep the speech bubble inside the room near the edges */
+        var shift = -50;
+        if (a.x < 24) shift = -16; else if (a.x > 76) shift = -84;
+        s.bubbleEl.style.transform = "translateX(" + shift + "%)";
+        s.el.style.zIndex = String(5 + Math.round(a.y));
+        if (a.main) s.el.style.zIndex = "60";
+      }
+      function findAgent(id) { for (var i = 0; i < agents.length; i++) if (agents[i].id === id) return agents[i]; return null; }
+
+      /* ============ status helpers ============ */
+      function statusClass(a) {
+        if (a.main) return "wait";
+        var active = null;
+        a.tasks.forEach(function (t) { if (t.state === "work") active = t; });
+        if (active) return "work";
+        var anyQueued = a.tasks.some(function (t) { return t.state === "queued"; });
+        return anyQueued ? "idle" : "done";
+      }
+      function currentTaskTitle(a) {
+        var t = a.tasks.filter(function (x) { return x.state === "work"; })[0];
+        if (t) return t.title;
+        t = a.tasks.filter(function (x) { return x.state === "wait"; })[0];
+        if (t) return t.title;
+        return "次の仕事を待っています";
+      }
+      function syncDots() {
+        agents.forEach(function (a) {
+          var s = state[a.id]; if (!s) return;
+          var c = statusClass(a);
+          s.dotEl.className = "sdot dot " + c;
+        });
+      }
+
+      /* ============ bubbles ============ */
+      function setAction(a,g){
+        var s=state[a.id]; if(!s) return;
+        s.gimmick=g;
+        if(g){ s.el.classList.add("has-prop","action-"+g.action); if(s.propEl) s.propEl.textContent=g.prop; s.actionUntil=performance.now()+9000+Math.random()*7000; if(Math.random()<0.6) addLog(a.name+"："+g.label+"をはじめました", !!a.main); }
+        refreshBubbles();
+      }
+      function clearAction(a){ var s=state[a.id]; if(!s) return; s.gimmick=null; s.el.classList.remove("has-prop","action-bath","action-workout","action-phone","action-eat","action-sofa","action-pc","action-read","action-game"); }
+      function refreshBubbles() {
+        agents.forEach(function (a) {
+          var s = state[a.id]; if (!s) return;
+          if (s.gimmick) { s.bubbleEl.textContent = s.gimmick.bubble; return; }
+          if (a.main) {
+            var daily=["スマホで明日の予定を確認中 📱","PCカタカタ…朝会資料を仕上げ中","コーヒー飲みながら返信チェック中"];
+            var all=a.bubbleLines.concat(daily);
+            s.bubbleEl.textContent = all[s.bubbleIdx % all.length];
+          } else if (s.mode === "walk") {
+            s.bubbleEl.textContent = "トコトコ移動中…";
+          } else {
+            var t = a.tasks.filter(function (x) { return x.state === "work"; })[0];
+            s.bubbleEl.textContent = t ? t.title + "中" : "休憩中です";
+          }
+        });
+      }
+      setInterval(function () {
+        var s = state.ocha; if (s) s.bubbleIdx++;
+        refreshBubbles();
+      }, 6000);
+      refreshBubbles();
+
+      /* ============ pathfinding: walk around furniture, not through it ============ */
+      /* Obstacles in room-% coordinates, matching the drawn furniture (desks incl. monitors,
+         wall, bathtub, TV, sofas, dining table, gym mat, shelf, chest, trees). */
+      var OBSTACLES = [
+        { x1: 0, y1: 0, x2: 100, y2: 18.5 },
+        { x1: 8, y1: 29.5, x2: 27, y2: 44.5 },
+        { x1: 40.5, y1: 25.5, x2: 59.5, y2: 40.5 },
+        { x1: 61, y1: 29.5, x2: 80, y2: 44.5 },
+        { x1: 8, y1: 53.5, x2: 27, y2: 68.5 },
+        { x1: 59, y1: 53.5, x2: 78, y2: 68.5 },
+        { x1: 85, y1: 19, x2: 99, y2: 28 },
+        { x1: 79, y1: 21, x2: 97, y2: 34 },
+        { x1: 37, y1: 66.5, x2: 59, y2: 77.5 },
+        { x1: 39, y1: 85, x2: 56, y2: 95 },
+        { x1: 30, y1: 85, x2: 41, y2: 95 },
+        { x1: 4, y1: 81, x2: 24, y2: 93 },
+        { x1: 79, y1: 81, x2: 95, y2: 89 },
+        { x1: 1, y1: 85, x2: 7, y2: 96 },
+        { x1: 0.5, y1: 18, x2: 5.5, y2: 32 },
+        { x1: 92, y1: 51, x2: 98, y2: 64 }
+      ];
+      var GW = 50, GH = 40;
+      function cellX(c) { return (c + 0.5) * 100 / GW; }
+      function cellY(r) { return (r + 0.5) * 100 / GH; }
+      function pointBlocked(x, y) {
+        if (x < 3.5 || x > 96.5 || y < 19.5 || y > 97) return true;
+        for (var i = 0; i < OBSTACLES.length; i++) {
+          var o = OBSTACLES[i];
+          if (x >= o.x1 && x <= o.x2 && y >= o.y1 && y <= o.y2) return true;
+        }
+        return false;
+      }
+      function cellBlocked(c, r, dyn) {
+        if (c < 0 || r < 0 || c >= GW || r >= GH) return true;
+        if (pointBlocked(cellX(c), cellY(r))) return true;
+        if (dyn && dyn[c + "," + r]) return true;
+        return false;
+      }
+      function nearestFreeCell(x, y, dyn) {
+        var c0 = Math.max(0, Math.min(GW - 1, Math.floor(x * GW / 100)));
+        var r0 = Math.max(0, Math.min(GH - 1, Math.floor(y * GH / 100)));
+        if (!cellBlocked(c0, r0, dyn)) return { c: c0, r: r0 };
+        for (var rad = 1; rad <= 14; rad++) {
+          for (var dc = -rad; dc <= rad; dc++) {
+            for (var dr = -rad; dr <= rad; dr++) {
+              if (Math.max(Math.abs(dc), Math.abs(dr)) !== rad) continue;
+              if (!cellBlocked(c0 + dc, r0 + dr, dyn)) return { c: c0 + dc, r: r0 + dr };
+            }
+          }
+        }
+        return null;
+      }
+      /* cells occupied by other agents, so routes bend around people standing still */
+      function dynBlockedFromAgents(selfId, onlyStay) {
+        var dyn = {};
+        agents.forEach(function (o) {
+          if (o.id === selfId) return;
+          var os = state[o.id]; if (!os) return;
+          if (onlyStay && os.mode === "walk") return;
+          var c0 = Math.floor(o.x * GW / 100), r0 = Math.floor(o.y * GH / 100);
+          for (var dc = -1; dc <= 1; dc++) for (var dr = -1; dr <= 1; dr++) dyn[(c0 + dc) + "," + (r0 + dr)] = true;
+        });
+        return dyn;
+      }
+      function findPath(x0, y0, x1, y1, dyn) {
+        var start = nearestFreeCell(x0, y0, dyn), goal = nearestFreeCell(x1, y1, dyn);
+        if (!start || !goal) return [];
+        if (start.c === goal.c && start.r === goal.r) return [{ x: cellX(goal.c), y: cellY(goal.r) }];
+        var dirs = [[1, 0, 1], [-1, 0, 1], [0, 1, 1], [0, -1, 1], [1, 1, 1.414], [1, -1, 1.414], [-1, 1, 1.414], [-1, -1, 1.414]];
+        var open = [{ c: start.c, r: start.r, g: 0, f: 0 }];
+        var gScore = {}, came = {}, closed = {};
+        gScore[start.c + "," + start.r] = 0;
+        var iter = 0;
+        while (open.length && iter++ < 8000) {
+          var bi = 0;
+          for (var i = 1; i < open.length; i++) if (open[i].f < open[bi].f) bi = i;
+          var cur = open.splice(bi, 1)[0];
+          var ck = cur.c + "," + cur.r;
+          if (cur.c === goal.c && cur.r === goal.r) {
+            var pts = [], k = ck;
+            while (k) {
+              var p = k.split(",");
+              pts.unshift({ x: cellX(+p[0]), y: cellY(+p[1]) });
+              k = came[k];
+            }
+            return pts;
+          }
+          if (closed[ck]) continue;
+          closed[ck] = true;
+          for (var d = 0; d < dirs.length; d++) {
+            var nc = cur.c + dirs[d][0], nr = cur.r + dirs[d][1];
+            if (cellBlocked(nc, nr, dyn)) continue;
+            /* no diagonal corner-cutting past furniture */
+            if (dirs[d][0] !== 0 && dirs[d][1] !== 0 &&
+              (cellBlocked(cur.c + dirs[d][0], cur.r, dyn) || cellBlocked(cur.c, cur.r + dirs[d][1], dyn))) continue;
+            var ng = cur.g + dirs[d][2], nk = nc + "," + nr;
+            if (gScore[nk] !== undefined && ng >= gScore[nk]) continue;
+            gScore[nk] = ng; came[nk] = ck;
+            open.push({ c: nc, r: nr, g: ng, f: ng + Math.hypot(goal.c - nc, goal.r - nr) });
+          }
+        }
+        return [];
+      }
+      function replan(a, includeWalkers) {
+        var s = state[a.id]; if (!s) return;
+        var dyn = dynBlockedFromAgents(a.id, !includeWalkers);
+        var path = findPath(a.x, a.y, s.goalX, s.goalY, dyn);
+        if (!path.length && includeWalkers) path = findPath(a.x, a.y, s.goalX, s.goalY, null);
+        if (path.length) {
+          if (!pointBlocked(s.goalX, s.goalY)) path[path.length - 1] = { x: s.goalX, y: s.goalY };
+          s.path = path; s.pathIdx = 0; s.tx = path[path.length - 1].x; s.ty = path[path.length - 1].y;
+        }
+      }
+      /* keep agents from piling onto the same spot: nudge a taken target to a nearby free one */
+      function spreadTarget(x, y, selfId) {
+        function occupied(px, py) {
+          for (var i = 0; i < agents.length; i++) {
+            var o = agents[i]; if (o.id === selfId) continue;
+            var os = state[o.id]; if (!os) continue;
+            var d = Math.hypot(o.x - px, (o.y - py) * 0.78);
+            var dg = os.mode === "walk" ? Math.hypot(os.goalX - px, (os.goalY - py) * 0.78) : 999;
+            if (d < 5.5 || dg < 5.5) return true;
+          }
+          return false;
+        }
+        if (!occupied(x, y)) return { x: x, y: y };
+        var radii = [5, 7.5, 10, 12.5];
+        for (var ri = 0; ri < radii.length; ri++) {
+          for (var ai = 0; ai < 8; ai++) {
+            var ang = ai * Math.PI / 4 + ri * 0.7;
+            var cx = x + Math.cos(ang) * radii[ri], cy = y + Math.sin(ang) * radii[ri] / 0.78;
+            if (cx < 6 || cx > 94 || cy < 21 || cy > 96) continue;
+            if (pointBlocked(cx, cy) || occupied(cx, cy)) continue;
+            return { x: cx, y: cy };
+          }
+        }
+        return { x: x, y: y };
+      }
+      function gimmickTaken(g, self) {
+        for (var i = 0; i < agents.length; i++) {
+          var o = agents[i]; if (o === self) continue;
+          var os = state[o.id]; if (!os) continue;
+          if (os.gimmick === g || os.pendingGimmick === g) return true;
+          if (os.mode === "walk" && Math.hypot(os.goalX - g.x, (os.goalY - g.y) * 0.78) < 4) return true;
+        }
+        return false;
+      }
+      /* walking priority: main agent first, then earlier members; the other one yields */
+      function agentPriority(a) {
+        if (a.main) return -1;
+        for (var i = 0; i < agents.length; i++) if (agents[i] === a) return i;
+        return 99;
+      }
+      function blockingAgent(a, dirX, dirY) {
+        var pa = agentPriority(a), blocker = null;
+        /* direction in the same y-squashed space as vx/vy below */
+        var dl = Math.hypot(dirX, dirY * 0.78) || 1;
+        var ux = dirX / dl, uy = dirY * 0.78 / dl;
+        agents.forEach(function (o) {
+          if (o === a || blocker) return;
+          var os = state[o.id]; if (!os) return;
+          var vx = o.x - a.x, vy = (o.y - a.y) * 0.78;
+          var od = Math.hypot(vx, vy);
+          if (od > 5.2 || od < 0.01) return;
+          /* only someone actually in front of us, inside our walking corridor,
+             can block us — a person behind or beside us must not, otherwise the
+             pair keeps entering/leaving the old 6.5 radius and trembling.
+             Very close contact (< 2.6) blocks regardless of angle. */
+          var fwd = (vx * ux + vy * uy) / od;
+          var lat = vx * -uy + vy * ux; /* signed lateral offset from our path */
+          if (od >= 2.6 && (fwd < 0.4 || Math.abs(lat) > 3.2)) return;
+          if (os.mode !== "walk") { blocker = o; return; }        /* standing person ahead: wait / detour */
+          if (agentPriority(o) < pa) { blocker = o; return; }    /* higher-priority walker goes first */
+          /* lower-priority walker: never block. We keep walking and they step
+             aside — yielding on BOTH sides at once was the head-on deadlock
+             that made pairs shake in place. */
+        });
+        return blocker;
+      }
+
+      /* ============ movement ============ */
+      var lastT = performance.now();
+      function nearestGimmick(x,y){ var best=null,bd=999; GIMMICKS.forEach(function(g){var d=Math.hypot(g.x-x,g.y-y); if(d<bd){bd=d;best=g;}}); return bd<9?best:null; }
+      function step(now) {
+        var dt = Math.min(64, now - lastT); lastT = now;
+        if (!paused && !reduced) {
+          agents.forEach(function (a) {
+            var s = state[a.id]; if (!s) return;
+            if(s.gimmick && now > s.actionUntil){ clearAction(a); s.strollAt = now + 4000 + Math.random()*8000; refreshBubbles(); }
+            if (s.mode === "walk") {
+              if (!s.path || !s.path.length) { s.path = [{ x: s.tx, y: s.ty }]; s.pathIdx = 0; }
+              var wp = s.path[Math.min(s.pathIdx, s.path.length - 1)];
+              var dx = wp.x - a.x, dy = wp.y - a.y;
+              var dist = Math.sqrt(dx * dx + dy * dy);
+              if (dist < 0.9) {
+                if (s.pathIdx < s.path.length - 1) {
+                  s.pathIdx++;
+                } else {
+                  a.x = s.tx; a.y = s.ty; s.mode = "stay"; s.path = [];
+                  s.el.classList.remove("walking");
+                  var g = s.pendingGimmick || nearestGimmick(a.x,a.y);
+                  if(g) setAction(a,g); else refreshBubbles();
+                  s.pendingGimmick=null;
+                  place(a);
+                }
+                return;
+              }
+              var dirX = dx / dist, dirY = dy / dist;
+              if (s.flipEl) {
+                /* wide dead-zone: near-vertical walks must not flip the sprite
+                   left/right on tiny direction noise (looked like shaking) */
+                if (dirX > 0.3) s.flipEl.style.transform = "scaleX(1)";
+                else if (dirX < -0.3) s.flipEl.style.transform = "scaleX(-1)";
+              }
+              /* --- don't walk into each other: yield, then detour if the wait drags on --- */
+              var blocker = blockingAgent(a, dirX, dirY);
+              if (blocker) {
+                s.clearSince = 0;
+                if (!s.yieldSince) {
+                  s.yieldSince = now;
+                  /* latch ONE escape side for the whole encounter: the side away
+                     from the blocker, or the side with free floor if they are
+                     dead ahead. Re-picking every frame (and backing up, which
+                     re-opened the blocking distance) is what made pairs
+                     oscillate / tremble in place. */
+                  var blat = (blocker.x - a.x) * -dirY + (blocker.y - a.y) * dirX;
+                  var side = blat > 0.4 ? -1 : blat < -0.4 ? 1 : 0;
+                  if (!side) {
+                    var t1x = a.x + -dirY * 4, t1y = a.y + dirX * 4;
+                    var t2x = a.x - -dirY * 4, t2y = a.y - dirX * 4;
+                    side = (!pointBlocked(t1x, t1y) || pointBlocked(t2x, t2y)) ? 1 : -1;
+                  }
+                  s.yieldSide = side;
+                }
+                s.el.classList.remove("walking");
+                /* sidestep briefly on the latched side only, with NO backward
+                   component, then simply wait until the way is clear */
+                if (now - s.yieldSince < 900) {
+                  var px = -dirY * s.yieldSide, py = dirX * s.yieldSide;
+                  var sideStep = 0.011 * dt;
+                  var nx = a.x + px * sideStep;
+                  var ny = a.y + py * sideStep;
+                  if (!pointBlocked(nx, ny) && Math.hypot(blocker.x - nx, (blocker.y - ny) * 0.78) > 3.2) {
+                    a.x = nx; a.y = ny; place(a);
+                  }
+                }
+                if (now - s.yieldSince > 1600 && now > s.replanAt) {
+                  s.replanAt = now + 5000;
+                  s.yieldSince = now;
+                  s.yieldSide = 0;
+                  replan(a, true);
+                }
+                return;
+              }
+              /* hysteresis: the way must stay clear for a moment before walking
+                 resumes, so the walking state cannot flicker frame to frame */
+              if (s.yieldSince) {
+                if (!s.clearSince) s.clearSince = now;
+                if (now - s.clearSince < 240) { s.el.classList.remove("walking"); return; }
+                s.yieldSince = 0; s.yieldSide = 0; s.clearSince = 0;
+              }
+              s.el.classList.add("walking");
+              /* stuck check (e.g. someone settled onto the route): re-route around everyone */
+              if (Math.hypot(a.x - s.stuckX, a.y - s.stuckY) > 2) { s.stuckX = a.x; s.stuckY = a.y; s.stuckAt = now; }
+              else if (now - s.stuckAt > 2600 && now > s.replanAt) {
+                s.replanAt = now + 4000; s.stuckAt = now;
+                replan(a, true);
+                return;
+              }
+              var speed = (a.main ? 0.016 : 0.02) * dt;
+              a.x += dirX * Math.min(speed, dist);
+              a.y += dirY * Math.min(speed, dist);
+              place(a);
+            } else if (!gathered && !s.gimmick && now > s.strollAt) {
+              var freeG = GIMMICKS.filter(function (g) { return !gimmickTaken(g, a); });
+              if(freeG.length && Math.random() < 0.85){
+                var g2 = freeG[Math.floor(Math.random()*freeG.length)];
+                s.pendingGimmick=g2; sendTo(a, g2.x, g2.y);
+              } else {
+                sendTo(a, a.home.x, a.home.y);
+              }
+              s.strollAt = now + 16000 + Math.random() * 22000;
+            }
+          });
+          /* --- separation: agents resting on top of each other drift apart --- */
+          for (var i = 0; i < agents.length; i++) {
+            for (var j = i + 1; j < agents.length; j++) {
+              var A = agents[i], B = agents[j];
+              var sa = state[A.id], sb = state[B.id];
+              if (!sa || !sb) continue;
+              if (sa.mode === "walk" || sb.mode === "walk") continue;
+              if (sa.gimmick && sb.gimmick) continue;
+              var ddx = B.x - A.x, ddy = (B.y - A.y) * 0.78;
+              var dd = Math.hypot(ddx, ddy);
+              if (dd < 4.5 && now > sb.sepAt && now > sa.sepAt) {
+                var mover = sb.gimmick ? A : B;
+                var other = mover === A ? B : A;
+                var ms = state[mover.id];
+                var awayX = mover.x - other.x, awayY = mover.y - other.y;
+                var al = Math.hypot(awayX, awayY) || 1;
+                ms.sepAt = now + 6000;
+                sendTo(mover, mover.x + (awayX / al) * 7, mover.y + (awayY / al) * 7);
+              }
+            }
+          }
+        }
+        requestAnimationFrame(step);
+      }
+      function sendTo(a, x, y, gimmick) {
+        var s = state[a.id]; if (!s) return;
+        clearAction(a);
+        if(gimmick) s.pendingGimmick=gimmick;
+        x = Math.max(6, Math.min(94, x)); y = Math.max(21, Math.min(96, y));
+        var tgt = spreadTarget(x, y, a.id);
+        var dyn = dynBlockedFromAgents(a.id, true);
+        var path = findPath(a.x, a.y, tgt.x, tgt.y, dyn);
+        if (!path.length) path = findPath(a.x, a.y, tgt.x, tgt.y, null);
+        if (path.length) {
+          if (!pointBlocked(tgt.x, tgt.y)) path[path.length - 1] = { x: tgt.x, y: tgt.y };
+          s.tx = path[path.length - 1].x; s.ty = path[path.length - 1].y;
+        } else {
+          s.tx = tgt.x; s.ty = tgt.y;
+        }
+        s.path = path; s.pathIdx = 0;
+        s.goalX = s.tx; s.goalY = s.ty;
+        s.yieldSince = 0; s.yieldSide = 0; s.clearSince = 0; s.replanAt = 0;
+        s.stuckX = a.x; s.stuckY = a.y; s.stuckAt = performance.now();
+        s.mode = "walk"; s.el.classList.add("walking");
+        refreshBubbles();
+      }
+      requestAnimationFrame(step);
+
+      room.addEventListener("click", function (ev) {
+        var r = room.getBoundingClientRect();
+        var x = ((ev.clientX - r.left) / r.width) * 100;
+        var y = ((ev.clientY - r.top) / r.height) * 100;
+        var a = findAgent(selectedId); if (a) sendTo(a, x, y);
+      });
+
+      /* ============ detail panel ============ */
+      var detailCard = document.getElementById("detailCard");
+      var stateIcon = { done: "✓", work: "●", wait: "!", queued: "…" };
+      function renderDetail() {
+        var a = findAgent(selectedId); if (!a) return;
+        var c = statusClass(a);
+        var chipLabel = a.main ? a.statusLabel : (c === "work" ? "作業中" : c === "done" ? "全タスク完了" : "待機中");
+        var html = "";
+        html += '<div class="detail-head"><div class="face">' + faceSVG(a.color, a.accessory, null, "idle", "", a.outfit) + "</div><div>" +
+          '<div class="detail-name">' + a.name +
+          (a.main ? '<span class="badge-main">メイン</span>' : '<span class="badge-sub">' + (a.badge || "サブ") + '</span>') + "</div>" +
+          '<div class="detail-role">' + a.role + "</div>" +
+          '<span class="chip ' + c + '"><span class="dot ' + c + '"></span>' + chipLabel + "</span>" +
+          "</div></div>";
+        var curG = state[a.id] && state[a.id].gimmick;
+        html += '<div style="margin-top:10px;font-size:12.5px;background:#1d1d2e;border:2px solid #55556e;border-radius:4px;padding:8px 10px">いまの様子： <b>' + (curG ? curG.prop + " " + curG.bubble : (state[a.id] && state[a.id].mode==="walk" ? "トコトコ移動中…" : "デスク／持ち場で活動中")) + '</b><br><span style="color:var(--muted)">日常アクション： PC作業・スマホ操作・食事・お風呂・筋トレ・ソファ休憩・読書・ゲームなどをランダムに行います</span></div>';
+        if (a.main) {
+          html += '<div class="real-note">おちゃ本人の仕事リストです（localhostサーバー経由の実報告）。金色の「メイン」バッジが付いています。</div>';
+        } else {
+          html += '<div class="demo-note">このエージェントの仕事は、localhostサーバー経由の実報告です。報告がない間は日常生活モードで過ごします。</div>';
+        }
+        html += '<ul class="tasklist">';
+        a.tasks.forEach(function (t) {
+          html += '<li class="task"><div class="task-top">' +
+            '<span class="task-ic ' + t.state + '">' + stateIcon[t.state] + "</span>" +
+            '<div><div class="task-title">' + t.title + '</div><div class="task-note">' + t.note + "</div></div>" +
+            '<span class="task-state ' + t.state + '">' + t.label + "</span></div>" +
+            (t.state === "work" || t.state === "wait" ? '<div class="bar"><i style="width:' + t.progress + '%"></i></div>' : "") +
+            "</li>";
+        });
+        html += "</ul>";
+        detailCard.innerHTML = html;
+      }
+
+      /* ============ member list & stats ============ */
+      var memberList = document.getElementById("memberList");
+      function renderMembers() {
+        memberList.innerHTML = "";
+        agents.forEach(function (a) {
+          var b = document.createElement("button");
+          b.type = "button";
+          b.className = "member-row" + (a.id === selectedId ? " sel" : "");
+          b.innerHTML = '<span class="face">' + faceSVG(a.color, a.accessory, null, "idle", "", a.outfit) + "</span>" +
+            '<span><span class="mname">' + a.name +
+            (a.main ? '<span class="badge-main">メイン</span>' : '<span class="badge-sub">' + (a.badge || "サブ") + '</span>') + "</span>" +
+            '<span class="mtask">' + currentTaskTitle(a) + "</span></span>" +
+            '<span class="dot ' + statusClass(a) + '"></span>';
+          b.addEventListener("click", function () { selectAgent(a.id); });
+          memberList.appendChild(b);
+        });
+        var work = 0, wait = 0, doneTasks = 0, totalTasks = 0;
+        agents.forEach(function (a) {
+          var c = statusClass(a);
+          if (c === "work") work++; if (c === "wait") wait++;
+          a.tasks.forEach(function (t) { totalTasks++; if (t.state === "done") doneTasks++; });
+        });
+        document.getElementById("stats").innerHTML =
+          '<span class="stat"><span class="dot work"></span>作業中 <b>' + work + "</b></span>" +
+          '<span class="stat"><span class="dot wait"></span>返信・確認待ち <b>' + wait + "</b></span>" +
+          '<span class="stat"><span class="dot done"></span>完了タスク <b>' + doneTasks + " / " + totalTasks + "</b></span>" +
+          '<span class="stat">メンバー <b>' + agents.length + "</b>人</span>";
+        syncDots();
+      }
+      function selectAgent(id) {
+        selectedId = id;
+        agents.forEach(function (a) { state[a.id].el.classList.toggle("selected", a.id === id); });
+        renderDetail(); renderMembers();
+      }
+
+      /* ============ activity log ============ */
+      var logList = document.getElementById("logList");
+      var logEntries = [];
+      function nowTime() {
+        var d = new Date();
+        return ("0" + d.getHours()).slice(-2) + ":" + ("0" + d.getMinutes()).slice(-2);
+      }
+      function addLog(text, real) {
+        logEntries.unshift({ t: nowTime(), text: text, real: !!real });
+        if (logEntries.length > 7) logEntries.pop();
+        logList.innerHTML = logEntries.map(function (e) {
+          return "<li><time>" + e.t + '</time><span class="tag ' + (e.real ? "real" : "demo") + '">' +
+            (e.real ? "実際" : "サンプル") + "</span><span>" + e.text + "</span></li>";
+        }).join("");
+      }
+      addLog("おちゃ：localhost版のお部屋が開きました。報告を待っています", true);
+
+      /* localhost版ではシミュレーションなし：タスクはサーバー報告でのみ変化する */
+
+      /* ============ controls ============ */
+      var btnPause = document.getElementById("btnPause");
+      btnPause.addEventListener("click", function () {
+        paused = !paused;
+        btnPause.textContent = paused ? "▶ 再開する" : "⏸ 一時停止";
+      });
+      document.getElementById("btnBubble").addEventListener("click", function () {
+        document.body.classList.toggle("no-bubbles");
+        this.textContent = document.body.classList.contains("no-bubbles") ? "吹き出し：OFF" : "吹き出し：ON";
+      });
+      document.getElementById("btnGather").addEventListener("click", function () {
+        gathered = !gathered;
+        this.textContent = gathered ? "仕事に戻す" : "みんなを広場に集める";
+        agents.forEach(function (a, i) {
+          if (gathered) {
+            var ang = (i / agents.length) * Math.PI * 2;
+            sendTo(a, 50 + Math.cos(ang) * 11, 71 + Math.sin(ang) * 9);
+          } else {
+            sendTo(a, a.home.x, a.home.y);
+          }
+        });
+        if (gathered) addLog("みんなが広場に集まりました", false);
+      });
+      var addCount = 0;
+      document.getElementById("btnAdd").addEventListener("click", function () {
+        var def = subPool[(4 + addCount) % subPool.length];
+        addCount++;
+        var freeDesk = desks[agents.length % desks.length];
+        var a = makeSub(def, 0);
+        a.x = 50; a.y = 95; a.home = { x: freeDesk.x, y: freeDesk.y };
+        agents.push(a);
+        var el = agentEl(a);
+        state[a.id] = { el: el, bubbleEl: el.querySelector(".bubble"), dotEl: el.querySelector(".sdot"),
+          flipEl: el.querySelector(".flip"), propEl: el.querySelector(".prop"),
+          tx: a.x, ty: a.y, mode: "stay", waitUntil: 0, bubbleIdx: 0, gimmick: null, actionUntil: 0, pendingGimmick: null,
+          path: [], pathIdx: 0, goalX: a.x, goalY: a.y, yieldSince: 0, yieldSide: 0, clearSince: 0, replanAt: 0, stuckX: a.x, stuckY: a.y, stuckAt: performance.now(), sepAt: 0,
+          strollAt: performance.now() + 8000 };
+        place(a);
+        sendTo(a, a.home.x, a.home.y);
+        addLog(a.name + "（" + def.role + "）がお部屋に加わりました", false);
+        selectAgent(a.id);
+        refreshBubbles();
+      });
+
+      selectAgent("ocha");
+      /* demo: start a few daily-life actions so the gimmicks are visible right away */
+      setTimeout(function(){ if(agents[1]){ state[agents[1].id].pendingGimmick=GIMMICKS[4]; sendTo(agents[1], GIMMICKS[4].x, GIMMICKS[4].y, GIMMICKS[4]); } }, 800);
+      setTimeout(function(){ if(agents[2]){ state[agents[2].id].pendingGimmick=GIMMICKS[3]; sendTo(agents[2], GIMMICKS[3].x, GIMMICKS[3].y, GIMMICKS[3]); } }, 1600);
+      setTimeout(function(){ if(agents[3]){ state[agents[3].id].pendingGimmick=GIMMICKS[2]; sendTo(agents[3], GIMMICKS[2].x, GIMMICKS[2].y, GIMMICKS[2]); } }, 2400);
+      setTimeout(function(){ if(agents[4]){ state[agents[4].id].pendingGimmick=GIMMICKS[0]; sendTo(agents[4], GIMMICKS[0].x, GIMMICKS[0].y, GIMMICKS[0]); } }, 3200);
+    
+      /* ============ live sync (localhost版) ============
+         local/server.mjs の /api/state を2秒ごとに取得し、
+         共通フォーマット（SPEC.md）の報告を各エージェントの tasks に反映する。 */
+      var liveConnected = false;
+      var liveBar = document.createElement("div");
+      liveBar.style.cssText = "position:fixed;top:8px;right:8px;z-index:200;background:#14141f;color:#fff;border:2px solid #55556e;border-radius:4px;padding:4px 10px;font-size:12px;font-weight:700;";
+      liveBar.textContent = "○ サーバー未接続（表示のみ）";
+      document.body.appendChild(liveBar);
+      var liveStateMap = { working: "work", waiting: "wait", queued: "queued", done: "done" };
+      var liveLabelMap = { working: "進行中", waiting: "待ち", queued: "予定", done: "完了" };
+      function applyLive(snap) {
+        var changed = false;
+        agents.forEach(function (a) {
+          var tasks = (snap.tasks || []).filter(function (t) { return t.agentKey === a.id; }).map(function (t) {
+            return { title: t.title, note: t.detail || "", state: liveStateMap[t.state] || "queued", label: liveLabelMap[t.state] || "", progress: t.progress || 0 };
+          });
+          var j = JSON.stringify(tasks);
+          if (a._liveJson !== j) {
+            a._liveJson = j;
+            a.tasks = tasks;
+            changed = true;
+            var cur = tasks.filter(function (t) { return t.state === "work"; })[0];
+            if (a.main) a.bubbleLines = [cur ? cur.title + "中" : "待機中です"];
+          }
+        });
+        if (changed) { renderDetail(); renderMembers(); syncDots(); refreshBubbles(); }
+      }
+      function pollLive() {
+        fetch("/api/state", { cache: "no-store" }).then(function (r) { return r.json(); }).then(function (snap) {
+          if (!liveConnected) { liveConnected = true; liveBar.textContent = "● LIVE（localhost連携中）"; addLog("localhostサーバーに接続しました", false); }
+          applyLive(snap);
+        }).catch(function () {
+          if (liveConnected) { liveConnected = false; liveBar.textContent = "○ サーバー未接続（表示のみ）"; }
+        });
+      }
+      setInterval(pollLive, 2000);
+      pollLive();
+</script>
+  </body>
+</html>
